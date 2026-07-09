@@ -45,13 +45,16 @@ button.snd-off{opacity:.5}
 #loadInput{display:none}
 #moveLog{margin-top:8px;font-size:.8rem;color:var(--ink-soft);max-height:36px;overflow-y:auto;padding:0 10px;opacity:.7}
 footer{text-align:center;padding:20px;color:var(--ink-soft);font-size:.8rem;opacity:.5}
-@media(max-width:480px){header h1{font-size:1.2rem;letter-spacing:4px}.back{position:static;display:inline-block;margin-top:8px;transform:none}}
+@media(max-width:480px){header h1{font-size:1.1rem;letter-spacing:4px}.back,.nav-links{position:static!important;display:inline-block;margin-top:4px;transform:none}.nav-links{text-align:center}}
 </style>
 </head>
 <body>
 <header>
   <a class="back" href="index.html">&larr; 回易經</a>
   <h1>象 棋<small>Chinese Chess</small></h1>
+  <div class="nav-links" style="position:absolute;right:12px;top:10px;display:flex;gap:4px">
+    <a href="anqi.html" style="color:var(--cinnabar);text-decoration:none;font-size:.75rem;padding:1px 6px;border:1px solid var(--cinnabar);border-radius:3px">暗棋</a>
+  </div>
 </header>
 <div class="container">
 <canvas id="board"></canvas>

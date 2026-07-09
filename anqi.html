@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>暗棋 · 易經五日通</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700;900&family=Ma+Shan+Zheng&display=swap');
+:root{--ink:#1a1714;--ink-soft:#3d362e;--paper:#ede4d3;--paper-2:#e3d7c0;--cinnabar:#a6321e;--cinnabar-soft:#c2542f;--gold:#9a7b3f;--line:#c4b393}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Serif TC',serif;color:var(--ink);background:var(--paper);background-image:radial-gradient(circle at 20%30%,rgba(154,123,63,.07),transparent 40%),radial-gradient(circle at 80%70%,rgba(166,50,30,.05),transparent 40%);line-height:1.8;min-height:100vh}
+header{text-align:center;padding:20px 14px 10px;border-bottom:3px double var(--line);position:relative}
+header h1{font-size:1.3rem;letter-spacing:6px;color:var(--ink)}
+header .nav-links{position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;gap:6px}
+header .nav-links a{color:var(--cinnabar);text-decoration:none;font-size:.78rem;padding:2px 8px;border:1px solid var(--cinnabar);border-radius:4px;transition:.2s}
+header .nav-links a:hover{background:var(--cinnabar);color:#fff}
+@media(max-width:480px){header{padding:14px 10px 8px}header h1{font-size:1.1rem;letter-spacing:4px}header .nav-links{position:static;transform:none;justify-content:center;margin-top:6px}}
+.container{max-width:550px;margin:8px auto;padding:0 8px;text-align:center}
+#board{cursor:pointer;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.25);display:block;margin:0 auto;max-width:100%;background:#e8d5a3}
+.panel{display:flex;justify-content:center;gap:16px;margin-top:6px;font-size:.82rem;color:var(--ink-soft)}
+.panel span{background:var(--paper-2);padding:2px 10px;border-radius:4px;border:1px solid var(--line)}
+#status{padding:5px 14px;border-radius:4px;font-weight:600;font-size:.9rem;margin-top:6px;min-width:120px}
+#status.active-red{background:var(--cinnabar);color:#fff}
+#status.active-black{background:var(--ink);color:var(--paper)}
+#status.win-red{background:var(--cinnabar);color:#fff;animation:pulse 1s infinite}
+#status.win-black{background:var(--ink);color:var(--paper);animation:pulse 1s infinite}
+#status.thinking{background:var(--gold);color:#fff}
+@keyframes pulse{50%{opacity:.6}}
+.btns{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:6px}
+.btns button{font-family:'Noto Serif TC',serif;background:var(--paper-2);color:var(--ink);border:1px solid var(--line);padding:4px 10px;border-radius:4px;cursor:pointer;font-size:.82rem;transition:.2s}
+.btns button:hover{background:var(--gold);color:#fff}
+.btns button.active{background:var(--cinnabar);color:#fff;border-color:var(--cinnabar)}
+.btns button.snd-off{opacity:.5}
+#loadInput{display:none}
+footer{text-align:center;padding:16px;color:var(--ink-soft);font-size:.75rem;opacity:.5}
+</style>
+</head>
+<body>
+<header>
+<h1>暗 棋<small style="display:block;font-size:.55rem;color:var(--gold);letter-spacing:1px">Dark Chess</small></h1>
+<div class="nav-links">
+  <a href="xiangqi.html">♟ 象棋</a>
+  <a href="index.html">☰ 易經</a>
+</div>
+</header>
+<div class="container">
+<canvas id="board"></canvas>
+<div id="status" class="active-red">紅方：翻一張牌或移動</div>
+<div class="panel">
+  <span id="redCount">紅方 0 枚</span>
+  <span id="faceCount">蓋牌 32</span>
+  <span id="blackCount">黑方 0 枚</span>
+</div>
+<div class="btns">
+  <button id="modeBtn">🤖 人機對戰</button>
+  <button id="undoBtn">↩ 悔棋</button>
+  <button id="newBtn">🔄 新局</button>
+  <button id="soundBtn">🔊</button>
+  <button id="saveBtn">💾 儲存</button>
+  <button id="loadBtn">📂 讀取</button>
+  <input type="file" id="loadInput" accept=".json">
+</div>
+</div>
+<footer>暗棋 · 與易經五日通同源</footer>
+<script>
+// ══════════════════════════════════════════
+// Constants & Setup
+// ══════════════════════════════════════════
+const ROWS=4,COLS=8,CELL=68,PAD=16,PR=28;
+const W=PAD*2+(COLS-1)*CELL,H=PAD*2+(ROWS-1)*CELL;
+
+const RANK={general:7,advisor:6,elephant:5,chariot:4,horse:3,cannon:2,soldier:1};
+const PIECE_ORDER=['soldier','cannon','horse','chariot','elephant','advisor','general'];
+const CHARS={red:{general:'帥',advisor:'仕',elephant:'相',chariot:'俥',horse:'傌',cannon:'炮',soldier:'兵'},black:{general:'將',advisor:'士',elephant:'象',chariot:'車',horse:'馬',cannon:'砲',soldier:'卒'}};
+
+// ══════════════════════════════════════════
+// Sound
+// ══════════════════════════════════════════
+const S={ctx:null,enabled:true,
+  init(){try{this.ctx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}},
+  _t(f,d,v=.3,t='sine',dl=0){if(!this.enabled||!this.ctx)return;const n=this.ctx.currentTime+dl,o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type=t;o.connect(g);g.connect(this.ctx.destination);o.frequency.setValueAtTime(f,n);g.gain.setValueAtTime(v,n);g.gain.exponentialRampToValueAtTime(.001,n+d);o.start(n);o.stop(n+d)},
+  flip(){this._t(1000,.1,.15)},
+  move(){this._t(800,.08,.2)},
+  capture(){this._t(300,.2,.35,'triangle')},
+  win(){this._t(600,.2,.3);this._t(400,.3,.25,void 0,.25);this._t(200,.5,.2,void 0,.6)},
+  lose(){this._t(300,.3,.3);this._t(200,.5,.25,void 0,.35)},
+  toggle(){this.enabled=!this.enabled;const b=document.getElementById('soundBtn');b.classList.toggle('snd-off',!this.enabled);b.textContent=this.enabled?'🔊':'🔇'}
+};
+
+// ══════════════════════════════════════════
+// Game State
+// ══════════════════════════════════════════
+let board,turn,selected,validMoves,history,gameOver,thinking;
+let redActive=0,blackActive=0,facedown=32;
+let aiMode=false,aiColor=null;
+
+const canvas=document.getElementById('board'),ctx=canvas.getContext('2d');
+canvas.width=W;canvas.height=H;
+const statusEl=document.getElementById('status'),redCountEl=document.getElementById('redCount'),blackCountEl=document.getElementById('blackCount'),faceCountEl=document.getElementById('faceCount');
+
+function createRandomBoard(){
+  const pieces=[];
+  const colors=['red','black'];
+  for(const c of colors){
+    pieces.push({color:c,type:'general',flipped:false});
+    for(let i=0;i<2;i++){pieces.push({color:c,type:'advisor'});pieces.push({color:c,type:'elephant'});pieces.push({color:c,type:'chariot'});pieces.push({color:c,type:'horse'});pieces.push({color:c,type:'cannon'})}
+    for(let i=0;i<5;i++)pieces.push({color:c,type:'soldier'});
+  }
+  // Fisher-Yates shuffle
+  for(let i=pieces.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pieces[i],pieces[j]]=[pieces[j],pieces[i]]}
+  const b=[];
+  let idx=0;
+  for(let r=0;r<4;r++){b[r]=[];for(let c=0;c<8;c++)b[r][c]=pieces[idx++]}
+  return b;
+}
+
+function countPieces(){
+  redActive=0;blackActive=0;facedown=0;
+  for(let r=0;r<4;r++)for(let c=0;c<8;c++){
+    const p=board[r][c];
+    if(!p)continue;
+    if(!p.flipped)facedown++;
+    else if(p.color==='red')redActive++;
+    else blackActive++;
+  }
+}
+
+function resetGame(){
+  board=createRandomBoard();turn='red';selected=null;validMoves=[];history=[];gameOver=false;thinking=false;
+  countPieces();updateStatus();draw();
+  document.getElementById('modeBtn').textContent=aiMode?(aiColor==='black'?'🤖 執紅戰AI':'🤖 執黑戰AI'):'👥 雙人對弈';
+}
+
+function toPixel(r,c){return{x:PAD+c*CELL,y:PAD+r*CELL}}
+function fromPixel(x,y){const c=Math.round((x-PAD)/CELL),r=Math.round((y-PAD)/CELL);if(r<0||r>3||c<0||c>7)return null;return{r,c}}
+
+// ══════════════════════════════════════════
+// Drawing
+// ══════════════════════════════════════════
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#e8d5a3';ctx.fillRect(0,0,W,H);
+  // Grid lines
+  ctx.strokeStyle='#7a5c3a';ctx.lineWidth=1.5;
+  for(let r=0;r<ROWS;r++){const y=PAD+r*CELL;ctx.beginPath();ctx.moveTo(PAD,y);ctx.lineTo(PAD+7*CELL,y);ctx.stroke()}
+  for(let c=0;c<COLS;c++){const x=PAD+c*CELL;ctx.beginPath();ctx.moveTo(x,PAD);ctx.lineTo(x,PAD+3*CELL);ctx.stroke()}
+  // Selected highlight
+  if(selected){const p=toPixel(selected.r,selected.c);ctx.beginPath();ctx.arc(p.x,p.y,PR+4,0,Math.PI*2);ctx.strokeStyle='#ffcc00';ctx.lineWidth=4;ctx.stroke()}
+  // Valid moves
+  for(const m of validMoves){const p=toPixel(m.r,m.c);if(board[m.r][m.c]){ctx.beginPath();ctx.arc(p.x,p.y,PR+3,0,Math.PI*2);ctx.strokeStyle='rgba(0,200,80,.7)';ctx.lineWidth=3;ctx.stroke()}else{ctx.beginPath();ctx.arc(p.x,p.y,8,0,Math.PI*2);ctx.fillStyle='rgba(0,200,80,.5)';ctx.fill()}}
+  // Pieces
+  for(let r=0;r<4;r++)for(let c=0;c<8;c++){const p=board[r][c];if(!p)continue;drawPiece(p,r,c)}
+}
+
+function drawPiece(p,r,c){
+  const px=toPixel(r,c);
+  if(!p.flipped){
+    // Face-down
+    ctx.beginPath();ctx.arc(px.x+1,px.y+1,PR,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,.15)';ctx.fill();
+    ctx.beginPath();ctx.arc(px.x,px.y,PR,0,Math.PI*2);ctx.fillStyle='#8b7355';ctx.fill();
+    ctx.strokeStyle='#5c4a33';ctx.lineWidth=2;ctx.stroke();
+    ctx.beginPath();ctx.arc(px.x,px.y,PR-4,0,Math.PI*2);ctx.strokeStyle='#6b5a42';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle='#3d3224';ctx.font='bold 20px "KaiTi","STKaiti",serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('●',px.x,px.y+1);
+    return;
+  }
+  const isRed=p.color==='red';
+  ctx.beginPath();ctx.arc(px.x+1,px.y+1,PR,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,.15)';ctx.fill();
+  ctx.beginPath();ctx.arc(px.x,px.y,PR,0,Math.PI*2);ctx.fillStyle='#fdf5e6';ctx.fill();
+  ctx.strokeStyle=isRed?'#cc0000':'#1a1a1a';ctx.lineWidth=2.5;ctx.stroke();
+  ctx.beginPath();ctx.arc(px.x,px.y,PR-5,0,Math.PI*2);ctx.strokeStyle=isRed?'#cc0000':'#1a1a1a';ctx.lineWidth=1;ctx.stroke();
+  const t=CHARS[p.color][p.type];
+  ctx.fillStyle=isRed?'#cc0000':'#1a1a1a';ctx.font='bold '+PR+'px "KaiTi","STKaiti","Noto Sans CJK SC",serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(t,px.x,px.y+1);
+}
+
+// ══════════════════════════════════════════
+// Game Logic
+// ══════════════════════════════════════════
+function inBoard(r,c){return r>=0&&r<4&&c>=0&&c<8}
+
+function canCapture(attacker,defender){
+  if(attacker.color===defender.color)return false;
+  const ra=RANK[attacker.type],rd=RANK[defender.type];
+  if(attacker.type==='soldier'&&defender.type==='general')return true;
+  if(defender.type==='soldier'&&attacker.type==='general')return false;
+  if(ra===rd)return 'both';
+  return ra>rd;
+}
+
+function getValidActions(r,c){
+  const p=board[r][c];if(!p||!p.flipped)return[];
+  const actions=[];
+  for(const[dr,dc]of[[-1,0],[1,0],[0,-1],[0,1]]){
+    const tr=r+dr,tc=c+dc;if(!inBoard(tr,tc))continue;
+    const t=board[tr][tc];
+    if(!t){actions.push({type:'move',tr,tc});continue}
+    if(!t.flipped||t.color===p.color)continue;
+    // Cannon special: can capture with screen
+    if(p.type==='cannon'){
+      // Check if there's exactly one screen in this direction
+      let screenCount=0,screenR=-1,screenC=-1;
+      let cr=r+dr,cc=c+dc;
+      while(inBoard(cr,cc)){
+        if(board[cr][cc]){screenCount++;if(screenCount===1){screenR=cr;screenC=cc}}
+        if(cr===tr&&cc===tc)break;
+        cr+=dr;cc+=dc;
+      }
+      if(screenCount===1&&screenR===tr&&screenC===tc){
+        // Adjacent with no screen - normal capture
+        const cap=canCapture(p,t);
+        if(cap)actions.push({type:'capture',tr,tc,result:cap});
+      } else if(screenCount===1&&!(screenR===tr&&screenC===tc)){
+        // Cannon jump capture - can capture any piece
+        actions.push({type:'capture',tr,tc,result:true});
+      }
+    } else {
+      const cap=canCapture(p,t);
+      if(cap)actions.push({type:'capture',tr,tc,result:cap});
+    }
+  }
+  return actions;
+}
+
+function getFlipActions(){
+  const actions=[];
+  for(let r=0;r<4;r++)for(let c=0;c<8;c++){const p=board[r][c];if(p&&!p.flipped)actions.push({type:'flip',r,c})}
+  return actions;
+}
+
+function makeMove(fr,fc,tr,tc){
+  const captured=board[tr][tc];
+  history.push({fr,fc,tr,tc,captured,boardState:JSON.parse(JSON.stringify(board)),turnBefore:turn});
+  const p=board[fr][fc];
+  board[tr][tc]=p;board[fr][fc]=null;
+  countPieces();
+  if(captured){if(captured.flipped)S.capture();else S.capture()}
+  turn=turn==='red'?'black':'red';
+  selected=null;validMoves=[];
+  checkGameOver();
+  if(!gameOver)updateStatus();draw();
+  if(!gameOver&&aiMode&&turn===aiColor)scheduleAI();
+}
+
+function makeFlip(r,c){
+  history.push({fr:r,fc:c,type:'flip',boardState:JSON.parse(JSON.stringify(board)),turnBefore:turn});
+  board[r][c].flipped=true;S.flip();
+  countPieces();
+  turn=turn==='red'?'black':'red';
+  selected=null;validMoves=[];
+  checkGameOver();
+  if(!gameOver)updateStatus();draw();
+  if(!gameOver&&aiMode&&turn===aiColor)scheduleAI();
+}
+
+function checkGameOver(){
+  countPieces();
+  if(redActive===0){statusEl.textContent='😵 黑方勝！';statusEl.className='win-black';gameOver=true;S.lose();return}
+  if(blackActive===0){statusEl.textContent='😵 紅方勝！';statusEl.className='win-red';gameOver=true;S.win();return}
+  // Also check if current player has valid actions
+  const hasFlip=getFlipActions().length>0;
+  let hasMove=false;
+  for(let r=0;r<4;r++)for(let c=0;c<8;c++){
+    const p=board[r][c];if(p&&p.flipped&&p.color===turn&&getValidActions(r,c).length>0)hasMove=true;
+  }
+  if(!hasFlip&&!hasMove){
+    const w=turn==='red'?'黑方':'紅方';statusEl.textContent='無棋可走 '+w+'勝！';
+    statusEl.className=turn==='red'?'win-black':'win-red';gameOver=true;
+    S[turn==='red'?'lose':'win']();
+  }
+}
+
+function updateStatus(){
+  countPieces();
+  redCountEl.textContent='紅方 '+redActive+' 枚';
+  blackCountEl.textContent='黑方 '+blackActive+' 枚';
+  faceCountEl.textContent='蓋牌 '+facedown;
+  if(gameOver)return;
+  if(thinking){statusEl.textContent='🤔 AI 思考中…';statusEl.className='thinking';return}
+  const name=turn==='red'?'紅方':'黑方';
+  const hasFlip=getFlipActions().length>0;
+  statusEl.textContent=name+(hasFlip?'：翻牌或移動':'：移動棋子');
+  statusEl.className='active-'+turn;
+}
+
+function undoMove(){
+  if(history.length===0||thinking)return;
+  const cnt=aiMode?2:1;
+  for(let i=0;i<cnt;i++){
+    const last=history.pop();if(!last)break;
+    board=last.boardState;turn=last.turnBefore;
+  }
+  selected=null;validMoves=[];gameOver=false;countPieces();updateStatus();draw();
+}
+
+// ══════════════════════════════════════════
+// AI
+// ══════════════════════════════════════════
+function evaluateBoard(){
+  let score=0;
+  const sign=aiColor==='red'?1:-1;
+  for(let r=0;r<4;r++)for(let c=0;c<8;c++){
+    const p=board[r][c];if(!p||!p.flipped)continue;
+    const val=RANK[p.type]*100;
+    score+=sign*(p.color===aiColor?val:-val);
+  }
+  return score;
+}
+
+function getBestAIAction(){
+  const flips=getFlipActions();
+  const moves=[];
+  for(let r=0;r<4;r++)for(let c=0;c<8;c++){
+    const p=board[r][c];if(p&&p.flipped&&p.color===aiColor)for(const a of getValidActions(r,c))moves.push({fr:r,fc:c,...a});
+  }
+  let bestScore=-Infinity,bestAction=null;
+
+  // Evaluate flips
+  for(const f of flips){
+    const nb=JSON.parse(JSON.stringify(board));nb[f.r][f.c].flipped=true;
+    const p=nb[f.r][f.c];
+    let score=0;
+    // Value of revealed piece (scaled by safety)
+    const pieceVal=RANK[p.type]*10+(p.color===aiColor?50:0);
+    // Count nearby friendly pieces
+    let friends=0;
+    for(const[dr,dc]of[[-1,0],[1,0],[0,-1],[0,1]]){
+      const tr=f.r+dr,tc=f.c+dc;if(!inBoard(tr,tc))continue;
+      const np=nb[tr][tc];if(np&&np.flipped&&np.color===aiColor)friends++;
+    }
+    score=(pieceVal<30?-pieceVal:pieceVal)+friends*20;
+    score+=Math.random()*5;
+    if(score>bestScore){bestScore=score;bestAction={type:'flip',r:f.r,c:f.c}}
+  }
+
+  // Evaluate moves
+  for(const m of moves){
+    const nb=JSON.parse(JSON.stringify(board));
+    const p=nb[m.fr][m.fc];const target=nb[m.tr][m.fc];
+    let score=0;
+    if(m.type==='capture'&&target){
+      const targetVal=RANK[target.type]*30;
+      const selfVal=RANK[p.type]*10;
+      // Check if we'll be captured next
+      let danger=0;
+      for(const[dr,dc]of[[-1,0],[1,0],[0,-1],[0,1]]){
+        const nr=m.tr+dr,nc=m.tc+dc;if(!inBoard(nr,nc))continue;
+        const np=nb[nr][nc];
+        if(np&&np.flipped&&np.color!==aiColor){
+          const actions=getValidActions(nr,nc); // simplified, uses current board
+          danger+=10;
+        }
+      }
+      score=targetVal-danger+selfVal*5;
+    } else {
+      score=Math.random()*10;
+    }
+    score+=Math.random()*8;
+    if(score>bestScore){bestScore=score;bestAction={type:'move',fr:m.fr,fc:m.fc,tr:m.tr,tc:m.tc}}
+  }
+
+  return bestAction;
+}
+
+function scheduleAI(){
+  if(gameOver||!aiMode||turn!==aiColor)return;
+  thinking=true;updateStatus();
+  setTimeout(()=>{
+    if(turn!==aiColor||gameOver){thinking=false;return}
+    const action=getBestAIAction();
+    thinking=false;
+    if(!action)return;
+    if(action.type==='flip')makeFlip(action.r,action.c);
+    else makeMove(action.fr,action.fc,action.tr,action.tc);
+  },300);
+}
+
+// ══════════════════════════════════════════
+// Mode
+// ══════════════════════════════════════════
+function cycleMode(){
+  if(!aiMode){aiMode=true;aiColor='black'}else if(aiColor==='black'){aiColor='red'}
+  else{aiMode=false;aiColor=null}
+  resetGame();
+}
+
+// ══════════════════════════════════════════
+// Save / Load
+// ══════════════════════════════════════════
+function saveGame(){
+  const data={v:1,date:new Date().toISOString(),mode:aiMode?aiColor:null,board,turn};
+  const blob=new Blob([JSON.stringify(data)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='暗棋棋譜_'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(url);
+}
+
+function loadGame(file){
+  const r=new FileReader();r.onload=e=>{
+    try{
+      const data=JSON.parse(e.target.result);
+      if(!data.board||!data.turn)throw new Error('格式錯誤');
+      S.enabled=false;
+      board=data.board;turn=data.turn;
+      aiMode=data.mode!==null&&data.mode!==undefined;aiColor=aiMode?data.mode:null;
+      selected=null;validMoves=[];history=[];gameOver=false;
+      countPieces();S.enabled=true;updateStatus();draw();
+    }catch(err){S.enabled=true;alert('讀取失敗：'+err.message);resetGame()}
+  };r.readAsText(file);
+}
+
+// ══════════════════════════════════════════
+// Events
+// ══════════════════════════════════════════
+function handleTap(x,y){
+  if(gameOver||thinking)return;
+  if(S.ctx&&S.ctx.state==='suspended')S.ctx.resume();
+  const rect=canvas.getBoundingClientRect(),sx=canvas.width/rect.width,sy=canvas.height/rect.height;
+  const cx=(x-rect.left)*sx,cy=(y-rect.top)*sy,pos=fromPixel(cx,cy);
+  if(!pos)return;const{r,c}=pos;
+
+  // If selected piece and clicking on valid action
+  if(selected&&validMoves.some(m=>m.r===r&&m.c===c)){
+    const action=validMoves.find(m=>m.r===r&&m.c===c);
+    if(action.type==='move'||action.type==='capture')makeMove(selected.r,selected.c,r,c);
+    return;
+  }
+
+  // Click on face-down piece
+  if(board[r][c]&&!board[r][c].flipped){
+    makeFlip(r,c);return;
+  }
+
+  // Click on own piece
+  if(board[r][c]&&board[r][c].flipped&&board[r][c].color===turn){
+    selected={r,c};validMoves=getValidActions(r,c).map(a=>({r:a.tr,c:a.tc,type:a.type}));draw();
+    return;
+  }
+
+  selected=null;validMoves=[];draw();
+}
+
+canvas.addEventListener('click',e=>handleTap(e.clientX,e.clientY));
+canvas.addEventListener('touchend',e=>{e.preventDefault();const t=e.changedTouches[0];handleTap(t.clientX,t.clientY)});
+
+document.getElementById('undoBtn').addEventListener('click',undoMove);
+document.getElementById('newBtn').addEventListener('click',resetGame);
+document.getElementById('modeBtn').addEventListener('click',cycleMode);
+document.getElementById('soundBtn').addEventListener('click',()=>S.toggle());
+document.getElementById('saveBtn').addEventListener('click',saveGame);
+document.getElementById('loadBtn').addEventListener('click',()=>document.getElementById('loadInput').click());
+document.getElementById('loadInput').addEventListener('change',e=>{if(e.target.files[0])loadGame(e.target.files[0]);e.target.value=''});
+
+document.addEventListener('keydown',e=>{if((e.key==='z'||e.key==='Z')&&(e.ctrlKey||e.metaKey)){e.preventDefault();undoMove()}if((e.key==='r'||e.key==='R')&&(e.ctrlKey||e.metaKey)){e.preventDefault();resetGame()}});
+
+S.init();resetGame();
+// Responsive canvas scaling
+(function(){const sc=Math.min(1,(window.innerWidth-16)/(PAD*2+(COLS-1)*CELL));canvas.style.width=~~(W*sc)+'px';canvas.style.height=~~(H*sc)+'px'})();
+</script>
+</body>
+</html>
