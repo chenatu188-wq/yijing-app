@@ -74,6 +74,8 @@ footer{text-align:center;padding:20px;color:var(--ink-soft);font-size:.8rem;opac
 <script>
 const CELL=60,PAD=45,ROWS=10,COLS=9,PR=25;
 const W=PAD*2+(COLS-1)*CELL,H=PAD*2+(ROWS-1)*CELL;
+const SCALE=Math.min(1,(window.innerWidth-20)/(PAD*2+(COLS-1)*CELL));
+const CW=W*SCALE,CH=H*SCALE;
 const CHARS={red:{general:'帥',advisor:'仕',elephant:'相',chariot:'俥',horse:'傌',cannon:'炮',soldier:'兵'},black:{general:'將',advisor:'士',elephant:'象',chariot:'車',horse:'馬',cannon:'砲',soldier:'卒'}};
 const PV={general:10000,chariot:900,cannon:450,horse:400,elephant:200,advisor:200,soldier:100};
 const S={ctx:null,enabled:true,
@@ -90,6 +92,7 @@ let board,turn,selected,validMoves,history,moveLog,moveRecord,gameOver;
 let aiMode=false,aiColor=null,difficulty=2,diffNames={1:'初級',2:'中級',3:'高級'},thinking=false;
 const canvas=document.getElementById('board'),ctx=canvas.getContext('2d');
 canvas.width=W;canvas.height=H;
+canvas.style.width=~~CW+"px";canvas.style.height=~~CH+"px";
 const statusEl=document.getElementById('status'),moveLogEl=document.getElementById('moveLog');
 
 function initBoard(){
