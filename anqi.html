@@ -158,10 +158,10 @@ function drawPiece(p,r,c){
   if(!p.flipped){
     // Face-down
     ctx.beginPath();ctx.arc(px.x+1,px.y+1,PR,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,.15)';ctx.fill();
-    ctx.beginPath();ctx.arc(px.x,px.y,PR,0,Math.PI*2);ctx.fillStyle='#8b7355';ctx.fill();
-    ctx.strokeStyle='#5c4a33';ctx.lineWidth=2;ctx.stroke();
-    ctx.beginPath();ctx.arc(px.x,px.y,PR-4,0,Math.PI*2);ctx.strokeStyle='#6b5a42';ctx.lineWidth=1;ctx.stroke();
-    ctx.fillStyle='#3d3224';ctx.font='bold 20px "KaiTi","STKaiti",serif';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.beginPath();ctx.arc(px.x,px.y,PR,0,Math.PI*2);ctx.fillStyle='#5a8a5a';ctx.fill();
+    ctx.strokeStyle='#3d6b3d';ctx.lineWidth=2;ctx.stroke();
+    ctx.beginPath();ctx.arc(px.x,px.y,PR-4,0,Math.PI*2);ctx.strokeStyle='#4a7a4a';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle='#2d4a2d';ctx.font='bold 20px "KaiTi","STKaiti",serif';ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText('●',px.x,px.y+1);
     return;
   }
