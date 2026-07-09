@@ -115,10 +115,11 @@ function createRandomBoard(){
 }
 
 function countPieces(){
-  redActive=0;blackActive=0;facedown=0;
+  redActive=0;blackActive=0;facedown=0;redTotal=0;blackTotal=0;
   for(let r=0;r<4;r++)for(let c=0;c<8;c++){
     const p=board[r][c];
     if(!p)continue;
+    if(p.color==='red')redTotal++;else blackTotal++;
     if(!p.flipped)facedown++;
     else if(p.color==='red')redActive++;
     else blackActive++;
@@ -255,8 +256,8 @@ function makeFlip(r,c){
 
 function checkGameOver(){
   countPieces();
-  if(redActive===0){statusEl.textContent='😵 黑方勝！';statusEl.className='win-black';gameOver=true;S.lose();return}
-  if(blackActive===0){statusEl.textContent='😵 紅方勝！';statusEl.className='win-red';gameOver=true;S.win();return}
+  if(redTotal===0){statusEl.textContent='😵 黑方勝！';statusEl.className='win-black';gameOver=true;S.lose();return}
+  if(blackTotal===0){statusEl.textContent='😵 紅方勝！';statusEl.className='win-red';gameOver=true;S.win();return}
   // Also check if current player has valid actions
   const hasFlip=getFlipActions().length>0;
   let hasMove=false;
